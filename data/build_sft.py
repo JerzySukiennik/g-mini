@@ -611,6 +611,38 @@ def build(tokenizer_path: Path, out_prefix: Path, max_len: int):
     # against the live ha-rooms.json, because the room list belongs to Gzowo AI
     # and duplicating it here would let the two drift — the model would keep
     # calling a room after Jurek renamed it.
+    # Odpowiadanie zdaniem, nie wycinkiem. PoQuAD uczy wskazywac fragment
+    # zrodla, co dalo G-Micro odpowiedz "koenzym" na pytanie czym jest
+    # fotosynteza — poprawny wycinek, bezuzyteczna odpowiedz. Ten zbior jest
+    # jego przeciwwaga: 97% pelnych zdan wobec 0% w PolQA (zmierzone, patrz
+    # data/build_style_sft.py). Maly i powtarzany, bo przy 178M parametrach
+    # decyduje spojnosc formy, nie objetosc.
+    style_path = Path("data/style_sft.jsonl")
+    style_kept = 0
+    if style_path.exists():
+        for line in style_path.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            made = format_example(row["instruction"], None, row["output"])
+            if made is None:
+                continue
+            prompt, reply = made
+            p_ids = tok.encode(prompt).ids
+            r_ids = tok.encode(reply).ids
+            ids = p_ids + r_ids
+            if len(ids) > max_len:
+                continue
+            mask = np.zeros(len(ids), dtype=np.uint8)
+            mask[len(p_ids):] = 1
+            for _ in range(row.get("repeats", 3)):
+                token_buf.append(np.asarray(ids, dtype=np.uint16))
+                mask_buf.append(mask)
+                style_kept += 1
+        kept += style_kept
+        print(f"styl odpowiedzi (PLLuM-Align): {style_kept:,} kept", flush=True)
+    else:
+        print(f"UWAGA: brak {style_path} — model bedzie odpowiadal wycinkami "
+              f"(uruchom data/build_style_sft.py)", flush=True)
+
     home_path = Path("data/home_sft.jsonl")
     home_kept = 0
     if home_path.exists():

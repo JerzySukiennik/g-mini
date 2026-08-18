@@ -10,3 +10,6 @@ data/*.txt
 data/*.bin
 data/*.idx
 checkpoints/
+
+# Zbior pochodny z PLLuM-Align (CC-BY-SA-4.0) — odtwarzalny skryptem
+data/style_sft.jsonl
